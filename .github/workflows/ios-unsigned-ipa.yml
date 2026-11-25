@@ -1,8 +1,9 @@
 # İmzasız iOS IPA üretir (Mac gerekmez). IPA, SideStore ile ücretsiz Apple ID kullanılarak
 # iPhone'a kurulur; imzalama SideStore tarafından yapılır (bkz. uygulama.md bölüm 12).
 #
-# Çıktı: Actions → ilgili çalıştırma → Artifacts → cdtp_robot_app-ipa-<no>
-# (GitHub artifact'ı zip olarak indirir; içinden .ipa dosyası çıkar.)
+# Çıktı:
+#  - iPhone için: Releases → "ios-son" → cdtp_robot_app-unsigned.ipa (girişsiz, doğrudan .ipa)
+#  - Actions → ilgili çalıştırma → Artifacts → cdtp_robot_app-ipa-<no> (giriş ister, zip içinde)
 name: iOS IPA (imzasız)
 
 on:
@@ -18,6 +19,8 @@ jobs:
   build-ios:
     runs-on: macos-latest
     timeout-minutes: 45
+    permissions:
+      contents: write # release oluşturmak için
     steps:
       - uses: actions/checkout@v7
 
@@ -56,3 +59,17 @@ jobs:
           path: dist/cdtp_robot_app-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
+
+      # iPhone Safari'den girişsiz indirilebilsin diye IPA, tek bir "ios-son" release'ine de
+      # yüklenir (her derlemede yenilenir). Sabit bağlantı:
+      # https://github.com/<kullanıcı>/<repo>/releases/download/ios-son/cdtp_robot_app-unsigned.ipa
+      - name: Release'e yükle (ios-son)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-son --cleanup-tag --yes || true
+          gh release create ios-son dist/cdtp_robot_app-unsigned.ipa \
+            --title "Son iOS derlemesi (#${{ github.run_number }})" \
+            --notes "Commit: ${{ github.sha }}. İmzasız IPA; SideStore ile kurulur." \
+            --target "${{ github.sha }}" \
+            --prerelease
