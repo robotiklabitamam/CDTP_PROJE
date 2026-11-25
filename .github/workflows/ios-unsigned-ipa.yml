@@ -1,0 +1,58 @@
+# İmzasız iOS IPA üretir (Mac gerekmez). IPA, SideStore ile ücretsiz Apple ID kullanılarak
+# iPhone'a kurulur; imzalama SideStore tarafından yapılır (bkz. uygulama.md bölüm 12).
+#
+# Çıktı: Actions → ilgili çalıştırma → Artifacts → cdtp_robot_app-ipa-<no>
+# (GitHub artifact'ı zip olarak indirir; içinden .ipa dosyası çıkar.)
+name: iOS IPA (imzasız)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.50.1 # yerel geliştirme ortamıyla aynı sürüm
+          cache: true
+
+      - name: Sürümler
+        run: |
+          xcodebuild -version
+          flutter --version
+
+      - name: Bağımlılıklar
+        run: flutter pub get
+
+      - name: Analiz ve testler
+        run: |
+          flutter analyze
+          flutter test
+
+      - name: iOS build (imzasız)
+        run: flutter build ios --release --no-codesign
+
+      - name: IPA paketle
+        run: |
+          mkdir -p dist/Payload
+          cp -R build/ios/iphoneos/Runner.app dist/Payload/
+          cd dist && zip -qry cdtp_robot_app-unsigned.ipa Payload
+          ls -lh cdtp_robot_app-unsigned.ipa
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cdtp_robot_app-ipa-${{ github.run_number }}
+          path: dist/cdtp_robot_app-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
